@@ -8,12 +8,6 @@ public class GameServer {
 
     public static void main(String[] args) throws IOException {
         System.out.println("Starting Server on port " + SharedData.PORT + "...");
-        try {
-            System.out.println("Local IP: " + InetAddress.getLocalHost().getHostAddress());
-        } catch (Exception e) {
-            System.out.println("Could not determine local IP.");
-        }
-
         ServerSocket serverSocket = new ServerSocket(SharedData.PORT);
 
         while (true) {

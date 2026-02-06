@@ -1,5 +1,0 @@
-0,Air,0,grass.png
-1,Bedrock,-1,bedrock.png
-2,Dirt,20,dirt.png
-3,Stone,60,stone.png
-4,Wood,40,wood.png
