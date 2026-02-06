@@ -6,7 +6,7 @@ import java.util.*;
 import javax.swing.*;
 import javax.swing.Timer; // Explicit import to avoid conflicts
 
-public class GameClient extends JPanel implements ActionListener, KeyListener, MouseListener, MouseWheelListener {
+public class GameClient extends JPanel implements ActionListener, KeyListener, MouseListener, MouseWheelListener, MouseMotionListener {
     // --- Network ---
     private Socket socket;
     private PrintWriter out;
@@ -27,7 +27,8 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private int selectedSlot = 0; 
     
     // --- Inputs & Logic ---
-    private boolean mining = false;
+    private boolean isLeftMousePressed = false;
+    private boolean isRightMousePressed = false;
     private float miningProgress = 0;
     private boolean up, down, left, right;
     
@@ -37,10 +38,11 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
 
     public GameClient() {
         this.setPreferredSize(new Dimension(800, 600));
-        this.setBackground(Color.BLACK);
+        this.setBackground(new Color(135, 206, 235)); // Sky blue background
         this.setFocusable(true);
         this.addKeyListener(this);
-        this.addMouseListener(this); // Only need clicks, we calculate position manually
+        this.addMouseListener(this);
+        this.addMouseMotionListener(this);
         this.addMouseWheelListener(this);
 
         generateWorld(SharedData.MAP_SEED); 
@@ -51,8 +53,11 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
 
     private void connectToServer() {
+        String ip = JOptionPane.showInputDialog(null, "Enter server IP:", "localhost");
+        if (ip == null || ip.isEmpty()) ip = "localhost";
+
         try {
-            socket = new Socket("localhost", SharedData.PORT);
+            socket = new Socket(ip, SharedData.PORT);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
@@ -149,42 +154,50 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
 
     private void handleMiningAndPlacing() {
-        if (!mining) {
+        if (!canReach) {
             miningProgress = 0;
             return;
         }
 
-        if (!canReach) return; // Ignore if too far
-
         int gridX = currentMouseWorldPos.x / SharedData.TILE_SIZE;
         int gridY = currentMouseWorldPos.y / SharedData.TILE_SIZE;
 
-        if (gridX < 0 || gridX >= SharedData.MAP_SIZE || gridY < 0 || gridY >= SharedData.MAP_SIZE) return;
+        if (gridX < 0 || gridX >= SharedData.MAP_SIZE || gridY < 0 || gridY >= SharedData.MAP_SIZE) {
+            miningProgress = 0;
+            return;
+        }
 
         int blockID = map[gridX][gridY];
-        SharedData.BlockProp prop = SharedData.getBlock(blockID);
 
-        // --- BREAKING ---
-        if (blockID != SharedData.AIR) {
-            miningProgress += 2.0f; // Speed
-            if (miningProgress >= prop.toughness && prop.toughness != -1) {
-                map[gridX][gridY] = SharedData.AIR; // Instant break
-                if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + SharedData.AIR);
+        // --- BREAKING (Left Click) ---
+        if (isLeftMousePressed) {
+            if (blockID != SharedData.AIR) {
+                SharedData.BlockProp prop = SharedData.getBlock(blockID);
+                miningProgress += 2.0f;
+                if (miningProgress >= prop.toughness && prop.toughness != -1) {
+                    map[gridX][gridY] = SharedData.AIR;
+                    if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + SharedData.AIR);
+                    miningProgress = 0;
+                }
+            } else {
                 miningProgress = 0;
             }
-        } 
-        // --- PLACING ---
-        else {
-            int item = inventory[selectedSlot];
-            if (item != SharedData.AIR) {
-                // Collision check (Don't place inside player)
-                Rectangle pRect = new Rectangle(playerX, playerY, PLAYER_SIZE, PLAYER_SIZE);
-                Rectangle bRect = new Rectangle(gridX * 32, gridY * 32, 32, 32);
-                
-                if (!pRect.intersects(bRect)) {
-                    map[gridX][gridY] = item; // Instant place
-                    if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + item);
-                    mining = false; // Require click release to place next
+        } else {
+            miningProgress = 0;
+        }
+
+        // --- PLACING (Right Click) ---
+        if (isRightMousePressed) {
+            if (blockID == SharedData.AIR) {
+                int item = inventory[selectedSlot];
+                if (item != SharedData.AIR) {
+                    Rectangle pRect = new Rectangle(playerX, playerY, PLAYER_SIZE, PLAYER_SIZE);
+                    Rectangle bRect = new Rectangle(gridX * 32, gridY * 32, 32, 32);
+
+                    if (!pRect.intersects(bRect)) {
+                        map[gridX][gridY] = item;
+                        if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + item);
+                    }
                 }
             }
         }
@@ -206,18 +219,17 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 int sx = x * 32 - camX;
                 int sy = y * 32 - camY;
 
-                if (id == SharedData.AIR) {
-                    g.setColor(new Color(60, 160, 60)); 
-                    g.fillRect(sx, sy, 32, 32);
-                    g.setColor(new Color(70, 170, 70));
-                    g.drawRect(sx, sy, 32, 32);
+                SharedData.BlockProp prop = SharedData.getBlock(id);
+                if (prop.texture != null) {
+                    g.drawImage(prop.texture, sx, sy, 32, 32, null);
                 } else {
-                    SharedData.BlockProp prop = SharedData.getBlock(id);
-                    g.setColor(prop.color);
+                    g.setColor(id == SharedData.AIR ? new Color(60, 160, 60) : Color.MAGENTA);
                     g.fillRect(sx, sy, 32, 32);
-                    g.setColor(prop.color.darker());
-                    g.drawRect(sx, sy, 32, 32);
                 }
+
+                // Optional grid lines
+                g.setColor(new Color(0, 0, 0, 20));
+                g.drawRect(sx, sy, 32, 32);
             }
         }
 
@@ -249,24 +261,66 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
 
     private void drawHUD(Graphics g) {
-        int barWidth = 5 * 50;
+        int barWidth = 5 * 60;
         int startX = (800 - barWidth) / 2;
         int startY = 520;
 
+        // Draw Hotbar Background
+        g.setColor(new Color(0, 0, 0, 150));
+        g.fillRoundRect(startX - 5, startY - 5, barWidth + 5, 60, 10, 10);
+
         for (int i = 0; i < 5; i++) {
-            int x = startX + (i * 50);
-            if (i == selectedSlot) g.setColor(Color.YELLOW); 
-            else g.setColor(Color.GRAY);
-            g.fillRect(x, startY, 45, 45);
+            int x = startX + (i * 60);
+
+            // Slot Background
+            if (i == selectedSlot) {
+                g.setColor(new Color(255, 255, 255, 200));
+                g.fillRoundRect(x, startY, 50, 50, 5, 5);
+                g.setColor(Color.YELLOW);
+                g.drawRoundRect(x, startY, 50, 50, 5, 5);
+            } else {
+                g.setColor(new Color(255, 255, 255, 50));
+                g.fillRoundRect(x, startY, 50, 50, 5, 5);
+                g.setColor(Color.WHITE);
+                g.drawRoundRect(x, startY, 50, 50, 5, 5);
+            }
 
             int itemId = inventory[i];
             SharedData.BlockProp prop = SharedData.getBlock(itemId);
-            if (itemId != SharedData.AIR) {
-                g.setColor(prop.color);
-                g.fillRect(x + 10, startY + 10, 25, 25);
+            if (prop.texture != null) {
+                g.drawImage(prop.texture, x + 5, startY + 5, 40, 40, null);
             }
+
             g.setColor(Color.WHITE);
             g.drawString(String.valueOf(i + 1), x + 5, startY + 15);
+        }
+
+        // --- Mining Progress Bar ---
+        if (miningProgress > 0) {
+            int gridX = currentMouseWorldPos.x / SharedData.TILE_SIZE;
+            int gridY = currentMouseWorldPos.y / SharedData.TILE_SIZE;
+            if (gridX >= 0 && gridX < SharedData.MAP_SIZE && gridY >= 0 && gridY < SharedData.MAP_SIZE) {
+                int blockID = map[gridX][gridY];
+                if (blockID != SharedData.AIR) {
+                    SharedData.BlockProp prop = SharedData.getBlock(blockID);
+                    if (prop.toughness > 0) {
+                        float percent = Math.min(1.0f, miningProgress / prop.toughness);
+                        int pWidth = 200;
+                        int px = (800 - pWidth) / 2;
+                        int py = startY + 65;
+
+                        // Background
+                        g.setColor(Color.BLACK);
+                        g.fillRect(px, py, pWidth, 15);
+                        // Progress
+                        g.setColor(Color.GREEN);
+                        g.fillRect(px + 2, py + 2, (int)((pWidth - 4) * percent), 11);
+                        // Border
+                        g.setColor(Color.WHITE);
+                        g.drawRect(px, py, pWidth, 15);
+                    }
+                }
+            }
         }
     }
 
@@ -286,11 +340,19 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
 
     // --- Inputs ---
-    public void mousePressed(MouseEvent e) { mining = true; }
-    public void mouseReleased(MouseEvent e) { mining = false; }
+    public void mousePressed(MouseEvent e) {
+        if (e.getButton() == MouseEvent.BUTTON1) isLeftMousePressed = true;
+        if (e.getButton() == MouseEvent.BUTTON3) isRightMousePressed = true;
+    }
+    public void mouseReleased(MouseEvent e) {
+        if (e.getButton() == MouseEvent.BUTTON1) isLeftMousePressed = false;
+        if (e.getButton() == MouseEvent.BUTTON3) isRightMousePressed = false;
+    }
     public void mouseClicked(MouseEvent e) {}
     public void mouseEntered(MouseEvent e) {}
     public void mouseExited(MouseEvent e) {}
+    public void mouseDragged(MouseEvent e) { updateMousePosition(); }
+    public void mouseMoved(MouseEvent e) { updateMousePosition(); }
     
     public void keyPressed(KeyEvent e) {
         int k = e.getKeyCode();
