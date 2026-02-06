@@ -67,6 +67,12 @@ public class GameServer {
                         // Tell everyone to update their map
                         broadcast(line, -1); // -1 means send to everyone including sender
                     }
+                    else if (command.equals("HIT")) {
+                        // "HIT targetID damage"
+                        int targetId = Integer.parseInt(parts[1]);
+                        int damage = Integer.parseInt(parts[2]);
+                        sendTo(targetId, "DAMAGE " + damage);
+                    }
                 }
             } catch (IOException e) {
                 System.out.println("Player " + id + " disconnected.");
@@ -74,6 +80,14 @@ public class GameServer {
                 synchronized (clients) {
                     clients.remove(id);
                 }
+            }
+        }
+
+        // Send a message to a specific player
+        private void sendTo(int targetId, String msg) {
+            synchronized (clients) {
+                PrintWriter pw = clients.get(targetId);
+                if (pw != null) pw.println(msg);
             }
         }
 

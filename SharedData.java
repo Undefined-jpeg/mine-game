@@ -18,13 +18,14 @@ public class SharedData {
     public static final int STONE = 3;
     public static final int WOOD = 4;
 
-    private static Map<Integer, BlockProp> blocks = new HashMap<>();
+    private static Map<Integer, ItemProp> items = new HashMap<>();
 
     static {
-        loadBlocks();
+        loadData();
     }
 
-    private static void loadBlocks() {
+    private static void loadData() {
+        // Load Blocks
         try (BufferedReader br = new BufferedReader(new FileReader("blocks.txt"))) {
             String line;
             while ((line = br.readLine()) != null) {
@@ -34,41 +35,69 @@ public class SharedData {
                 String name = parts[1];
                 int toughness = Integer.parseInt(parts[2]);
                 String textureName = parts[3];
-
-                BufferedImage img = null;
-                try {
-                    File imgFile = new File("resources/textures/" + textureName);
-                    if (imgFile.exists()) {
-                        img = ImageIO.read(imgFile);
-                    }
-                } catch (Exception e) {
-                    System.err.println("Could not load texture: " + textureName);
-                }
-
-                blocks.put(id, new BlockProp(name, toughness, img));
+                items.put(id, new ItemProp(name, id, toughness, textureName, "BLOCK", 0));
             }
-        } catch (IOException e) {
-            System.err.println("Could not load blocks.txt, using defaults.");
-            // Fallback defaults
-            blocks.put(AIR, new BlockProp("Air", 0, null));
-            blocks.put(BEDROCK, new BlockProp("Bedrock", -1, null));
-            blocks.put(DIRT, new BlockProp("Dirt", 20, null));
-            blocks.put(STONE, new BlockProp("Stone", 60, null));
-            blocks.put(WOOD, new BlockProp("Wood", 40, null));
-        }
+        } catch (IOException e) { e.printStackTrace(); }
+
+        // Load Items (Tools)
+        try (BufferedReader br = new BufferedReader(new FileReader("items.txt"))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split(",");
+                int id = Integer.parseInt(parts[0]);
+                String name = parts[1];
+                String type = parts[2];
+                int tier = Integer.parseInt(parts[3]);
+                String textureName = parts[4];
+                items.put(id, new ItemProp(name, id, 0, textureName, type, tier));
+            }
+        } catch (IOException e) { e.printStackTrace(); }
     }
 
-    public static BlockProp getBlock(int id) {
-        return blocks.getOrDefault(id, blocks.get(AIR));
+    public static ItemProp getItem(int id) {
+        return items.getOrDefault(id, new ItemProp("Air", 0, 0, null, "AIR", 0));
     }
 
-    public static class BlockProp {
+    // Keep for backward compatibility if needed, but redirects to getItem
+    public static ItemProp getBlock(int id) {
+        return getItem(id);
+    }
+
+    public static class ItemProp {
         public String name;
-        public int toughness;
+        public int id;
+        public int toughness; // For blocks
+        public String textureName;
+        public String type;    // BLOCK, SWORD, PICKAXE, AXE, SHOVEL
+        public int tier;
         public BufferedImage texture;
         
-        public BlockProp(String n, int t, BufferedImage tex) {
-            this.name = n; this.toughness = t; this.texture = tex;
+        public ItemProp(String n, int id, int t, String texName, String type, int tier) {
+            this.name = n; this.id = id; this.toughness = t; this.textureName = texName;
+            this.type = type; this.tier = tier;
+            try {
+                File imgFile = new File("resources/textures/" + texName);
+                if (imgFile.exists()) {
+                    this.texture = ImageIO.read(imgFile);
+                }
+            } catch (Exception e) {}
+        }
+
+        public boolean isBlock() { return "BLOCK".equals(type); }
+
+        public float getMiningSpeed(int blockID) {
+            ItemProp block = SharedData.getItem(blockID);
+            float speed = 2.0f;
+            if ("PICKAXE".equals(this.type) && blockID == SharedData.STONE) speed *= (1 + tier * 2);
+            if ("SHOVEL".equals(this.type) && blockID == SharedData.DIRT) speed *= (1 + tier * 2);
+            if ("AXE".equals(this.type) && blockID == SharedData.WOOD) speed *= (1 + tier * 2);
+            return speed;
+        }
+
+        public int getDamage() {
+            if ("SWORD".equals(type)) return 10 + tier * 5;
+            return 2;
         }
     }
 }
