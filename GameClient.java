@@ -39,6 +39,17 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private boolean isFullscreen = false;
     private JFrame frame;
 
+    // --- Dash ---
+    private boolean isDashing = false;
+    private long dashStartTime;
+    private double dashVX, dashVY;
+    private long lastDashTime = 0;
+    private static final long DASH_COOLDOWN = 2000;
+    private static final long DASH_DURATION = 200;
+    private static final double DASH_SPEED = 15.0;
+    private Point dashBurstPoint = null;
+    private long dashBurstStartTime = 0;
+
     // --- Assets ---
     private BufferedImage playerTexture;
     private BufferedImage heartTexture;
@@ -119,6 +130,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 repaint();
             }
             else if (cmd.equals("DAMAGE")) {
+                if (isDashing) return; // Invincible while dashing
                 health -= Integer.parseInt(parts[1]);
                 if (health <= 0) {
                     health = 100;
@@ -151,8 +163,25 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         // 1. Calculate Mouse Position
         updateMousePosition();
 
-        // 2. Player Movement
-        if (!isInventoryOpen) {
+        // 2. Dash Logic
+        if (isDashing) {
+            long elapsed = System.currentTimeMillis() - dashStartTime;
+            if (elapsed > DASH_DURATION) {
+                isDashing = false;
+            } else {
+                int nextX = (int)(playerX + dashVX);
+                int nextY = (int)(playerY + dashVY);
+                if (canMove(nextX, nextY)) {
+                    playerX = nextX;
+                    playerY = nextY;
+                } else {
+                    isDashing = false;
+                }
+            }
+        }
+
+        // 3. Player Movement
+        if (!isInventoryOpen && !isDashing) {
             int speed = 5;
             if (up && canMove(playerX, playerY - speed)) playerY -= speed;
             if (down && canMove(playerX, playerY + speed)) playerY += speed;
@@ -165,7 +194,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
 
         if (out != null) out.println("POS " + playerX + " " + playerY);
 
-        // 3. Mining Logic
+        // 4. Mining Logic
         if (!isInventoryOpen) handleMiningAndPlacing();
         
         repaint();
@@ -312,6 +341,18 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
 
         g2d.translate(-(px + 10), -(py + 10));
+
+        // Draw Dash Burst
+        if (dashBurstPoint != null) {
+            long elapsed = System.currentTimeMillis() - dashBurstStartTime;
+            if (elapsed < 300) {
+                g2d.setColor(new Color(255, 255, 255, (int)(255 * (1 - elapsed / 300.0))));
+                int size = (int)(20 + elapsed / 5.0);
+                g2d.drawOval(dashBurstPoint.x - camX - size / 2, dashBurstPoint.y - camY - size / 2, size, size);
+            } else {
+                dashBurstPoint = null;
+            }
+        }
 
         // --- NEW: LASER SIGHT (DEBUG) ---
         // Draws a line from player to mouse. 
@@ -532,6 +573,21 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
         if (k == KeyEvent.VK_F11) {
             toggleFullscreen();
+        }
+        if (k == KeyEvent.VK_Q) {
+            long now = System.currentTimeMillis();
+            if (now - lastDashTime > DASH_COOLDOWN && !isInventoryOpen) {
+                isDashing = true;
+                dashStartTime = now;
+                lastDashTime = now;
+
+                double angle = Math.atan2(currentMouseWorldPos.y - (playerY + 10), currentMouseWorldPos.x - (playerX + 10));
+                dashVX = Math.cos(angle) * DASH_SPEED;
+                dashVY = Math.sin(angle) * DASH_SPEED;
+
+                dashBurstPoint = new Point(playerX + 10, playerY + 10);
+                dashBurstStartTime = now;
+            }
         }
     }
 
