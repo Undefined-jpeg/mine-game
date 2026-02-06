@@ -35,7 +35,8 @@ public class SharedData {
                 String name = parts[1];
                 int toughness = Integer.parseInt(parts[2]);
                 String textureName = parts[3];
-                items.put(id, new ItemProp(name, id, toughness, textureName, "BLOCK", 0));
+                int value = parts.length > 4 ? Integer.parseInt(parts[4]) : 0;
+                items.put(id, new ItemProp(name, id, toughness, textureName, "BLOCK", 0, value));
             }
         } catch (IOException e) { e.printStackTrace(); }
 
@@ -50,13 +51,13 @@ public class SharedData {
                 String type = parts[2];
                 int tier = Integer.parseInt(parts[3]);
                 String textureName = parts[4];
-                items.put(id, new ItemProp(name, id, 0, textureName, type, tier));
+                items.put(id, new ItemProp(name, id, 0, textureName, type, tier, 0));
             }
         } catch (IOException e) { e.printStackTrace(); }
     }
 
     public static ItemProp getItem(int id) {
-        return items.getOrDefault(id, new ItemProp("Air", 0, 0, null, "AIR", 0));
+        return items.getOrDefault(id, new ItemProp("Air", 0, 0, null, "AIR", 0, 0));
     }
 
     // Keep for backward compatibility if needed, but redirects to getItem
@@ -71,11 +72,12 @@ public class SharedData {
         public String textureName;
         public String type;    // BLOCK, SWORD, PICKAXE, AXE, SHOVEL
         public int tier;
+        public int value;
         public BufferedImage texture;
         
-        public ItemProp(String n, int id, int t, String texName, String type, int tier) {
+        public ItemProp(String n, int id, int t, String texName, String type, int tier, int value) {
             this.name = n; this.id = id; this.toughness = t; this.textureName = texName;
-            this.type = type; this.tier = tier;
+            this.type = type; this.tier = tier; this.value = value;
             try {
                 File imgFile = new File("resources/textures/" + texName);
                 if (imgFile.exists()) {

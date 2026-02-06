@@ -62,6 +62,10 @@ public class GameServer {
                         // Forward this to everyone else so they see the player
                         broadcast("PLAYER " + id + " " + parts[1] + " " + parts[2], id);
                     } 
+                    else if (command.equals("MONEY")) {
+                        // Player money update: "MONEY balance"
+                        broadcast("MONEY " + id + " " + parts[1], id);
+                    }
                     else if (command.equals("BLOCK")) {
                         // Block changed: "BLOCK x y type"
                         // Tell everyone to update their map

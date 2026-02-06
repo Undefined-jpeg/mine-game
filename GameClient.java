@@ -16,7 +16,13 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     
     // --- Game World ---
     private int[][] map = new int[SharedData.MAP_SIZE][SharedData.MAP_SIZE];
-    private Map<Integer, Point> otherPlayers = new HashMap<>();
+    private Map<Integer, PlayerData> otherPlayers = new HashMap<>();
+
+    private static class PlayerData {
+        Point pos;
+        int money;
+        PlayerData(Point p, int m) { this.pos = p; this.money = m; }
+    }
 
     // --- Player State ---
     private int playerX = SharedData.MAP_SIZE / 2 * SharedData.TILE_SIZE;
@@ -36,6 +42,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private float miningProgress = 0;
     private boolean up, down, left, right;
     private int health = 100;
+    private int money = 0;
     private boolean isFullscreen = false;
     private JFrame frame;
 
@@ -70,6 +77,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
 
         generateWorld(SharedData.MAP_SEED); 
         loadAssets();
+        loadMoney();
         connectToServer();
 
         // Give some starting items
@@ -120,8 +128,16 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 int pid = Integer.parseInt(parts[1]);
                 int x = Integer.parseInt(parts[2]);
                 int y = Integer.parseInt(parts[3]);
-                otherPlayers.put(pid, new Point(x, y));
+                PlayerData pd = otherPlayers.get(pid);
+                if (pd == null) otherPlayers.put(pid, new PlayerData(new Point(x, y), 0));
+                else pd.pos = new Point(x, y);
             } 
+            else if (cmd.equals("MONEY")) {
+                int pid = Integer.parseInt(parts[1]);
+                int m = Integer.parseInt(parts[2]);
+                PlayerData pd = otherPlayers.get(pid);
+                if (pd != null) pd.money = m;
+            }
             else if (cmd.equals("BLOCK")) {
                 int bx = Integer.parseInt(parts[1]);
                 int by = Integer.parseInt(parts[2]);
@@ -192,7 +208,10 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         camX = playerX - getWidth() / 2;
         camY = playerY - getHeight() / 2;
 
-        if (out != null) out.println("POS " + playerX + " " + playerY);
+        if (out != null) {
+            out.println("POS " + playerX + " " + playerY);
+            out.println("MONEY " + money);
+        }
 
         // 4. Mining Logic
         if (!isInventoryOpen) handleMiningAndPlacing();
@@ -244,6 +263,8 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 miningProgress += heldItem.getMiningSpeed(blockID);
                 if (miningProgress >= prop.toughness && prop.toughness != -1) {
                     map[gridX][gridY] = SharedData.AIR;
+                    money += prop.value;
+                    saveMoney();
                     if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + SharedData.AIR);
                     miningProgress = 0;
                 }
@@ -251,8 +272,8 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 miningProgress = 0;
                 // Sword attack check?
                 if (heldItem.type.equals("SWORD")) {
-                    for (Map.Entry<Integer, Point> entry : otherPlayers.entrySet()) {
-                        Point p = entry.getValue();
+                    for (Map.Entry<Integer, PlayerData> entry : otherPlayers.entrySet()) {
+                        Point p = entry.getValue().pos;
                         if (Math.hypot(p.x - currentMouseWorldPos.x, p.y - currentMouseWorldPos.y) < 20) {
                             if (out != null) out.println("HIT " + entry.getKey() + " " + heldItem.getDamage());
                             isLeftMousePressed = false; // Prevent rapid hit
@@ -283,10 +304,13 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
+        int tilesX = (getWidth() / 32) + 2;
+        int tilesY = (getHeight() / 32) + 2;
+
         int startX = Math.max(0, camX / 32);
         int startY = Math.max(0, camY / 32);
-        int endX = Math.min(SharedData.MAP_SIZE, startX + 27);
-        int endY = Math.min(SharedData.MAP_SIZE, startY + 21);
+        int endX = Math.min(SharedData.MAP_SIZE, startX + tilesX);
+        int endY = Math.min(SharedData.MAP_SIZE, startY + tilesY);
 
         // 1. Draw Map
         for (int x = startX; x < endX; x++) {
@@ -310,8 +334,14 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
 
         // 2. Draw Other Players
+    for (Map.Entry<Integer, PlayerData> entry : otherPlayers.entrySet()) {
+        PlayerData pd = entry.getValue();
         g.setColor(Color.BLUE);
-        for (Point p : otherPlayers.values()) g.fillRect(p.x - camX, p.y - camY, PLAYER_SIZE, PLAYER_SIZE);
+        g.fillRect(pd.pos.x - camX, pd.pos.y - camY, PLAYER_SIZE, PLAYER_SIZE);
+        g.setColor(Color.YELLOW);
+        g.setFont(new Font("Arial", Font.BOLD, 14));
+        g.drawString("$" + pd.money, pd.pos.x - camX, pd.pos.y - camY - 5);
+    }
 
         // 3. Draw Local Player
         Graphics2D g2d = (Graphics2D) g;
@@ -372,6 +402,10 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
 
     private void drawHUD(Graphics g) {
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 20));
+        g.drawString("Money: $" + money, 20, 30);
+
         int hotbarSlots = 8;
         int barWidth = hotbarSlots * 60;
         int startX = (getWidth() - barWidth) / 2;
@@ -591,13 +625,36 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
     }
 
+    private void saveMoney() {
+        try (PrintWriter pw = new PrintWriter(new FileWriter("money.txt"))) {
+            pw.println(money);
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    private void loadMoney() {
+        File f = new File("money.txt");
+        if (f.exists()) {
+            try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+                money = Integer.parseInt(br.readLine());
+            } catch (Exception e) { e.printStackTrace(); }
+        }
+    }
+
     private void toggleFullscreen() {
         isFullscreen = !isFullscreen;
+        GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
         frame.dispose();
         if (isFullscreen) {
             frame.setUndecorated(true);
-            frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+            if (gd.isFullScreenSupported()) {
+                gd.setFullScreenWindow(frame);
+            } else {
+                frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+            }
         } else {
+            if (gd.getFullScreenWindow() == frame) {
+                gd.setFullScreenWindow(null);
+            }
             frame.setUndecorated(false);
             frame.setExtendedState(JFrame.NORMAL);
             frame.setSize(800, 600);
@@ -623,9 +680,17 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         JFrame frame = new JFrame("Java Multiplayer Voxel");
         GameClient client = new GameClient(frame);
         frame.setContentPane(client);
-        frame.pack();
+        frame.setUndecorated(true);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLocationRelativeTo(null);
+
+        GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+        if (gd.isFullScreenSupported()) {
+            gd.setFullScreenWindow(frame);
+            client.isFullscreen = true;
+        } else {
+            frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+        }
+
         frame.setVisible(true);
     }
 }
