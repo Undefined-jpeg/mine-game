@@ -22,6 +22,7 @@ public class SharedData {
     public static final int IRON_ORE = 7;
     public static final int GOLD_ORE = 8;
     public static final int DIAMOND_ORE = 9;
+    public static final int FURNACE = 10;
 
     private static Map<Integer, ItemProp> items = new HashMap<>();
 
@@ -96,7 +97,7 @@ public class SharedData {
         public float getMiningSpeed(int blockID) {
             ItemProp block = SharedData.getItem(blockID);
             float speed = 2.0f;
-            boolean isStoneLike = (blockID == STONE || blockID == IRON_ORE || blockID == GOLD_ORE || blockID == DIAMOND_ORE);
+            boolean isStoneLike = (blockID == STONE || blockID == IRON_ORE || blockID == GOLD_ORE || blockID == DIAMOND_ORE || blockID == FURNACE);
             boolean isWoodLike = (blockID == WOOD || blockID == PLANKS || blockID == CRAFTER);
 
             if ("PICKAXE".equals(this.type) && isStoneLike) speed *= (1 + tier * 2);

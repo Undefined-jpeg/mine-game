@@ -8,3 +8,4 @@
 7,Iron Ore,80,iron_ore.png,20
 8,Gold Ore,100,gold_ore.png,50
 9,Diamond Ore,150,diamond_ore.png,100
+10,Furnace,50,furnace.png,15
