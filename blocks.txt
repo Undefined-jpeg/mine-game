@@ -3,3 +3,8 @@
 2,Dirt,20,dirt.png,1
 3,Stone,60,stone.png,5
 4,Wood,40,wood.png,3
+5,Planks,30,planks.png,2
+6,Crafter,40,crafter.png,10
+7,Iron Ore,80,iron_ore.png,20
+8,Gold Ore,100,gold_ore.png,50
+9,Diamond Ore,150,diamond_ore.png,100

@@ -31,9 +31,10 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private static final int PLAYER_SIZE = 20; 
 
     // --- Inventory ---
-    private Inventory inventory = new Inventory(32);
+    private Inventory inventory = new Inventory(42); // 32 inv + 9 crafting + 1 output
     private int selectedSlot = 0; 
     private boolean isInventoryOpen = false;
+    private boolean isCraftingOpen = false;
     private int draggingSlot = -1;
     
     // --- Inputs & Logic ---
@@ -78,14 +79,16 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         generateWorld(SharedData.MAP_SEED); 
         loadAssets();
         loadMoney();
+        loadInventory();
         connectToServer();
 
         // Give some starting items
         inventory.setItem(0, SharedData.DIRT);
         inventory.setItem(1, SharedData.STONE);
         inventory.setItem(2, SharedData.WOOD);
-        inventory.setItem(3, 110); // Wood Pickaxe
-        inventory.setItem(4, 100); // Wood Sword
+        inventory.setItem(3, SharedData.CRAFTER);
+        inventory.setItem(4, 110); // Wood Pickaxe
+        inventory.setItem(5, 100); // Wood Sword
 
         Timer timer = new Timer(1000 / 60, this); 
         timer.start();
@@ -164,10 +167,13 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 if (x == 0 || x == SharedData.MAP_SIZE - 1 || y == 0 || y == SharedData.MAP_SIZE - 1) {
                     map[x][y] = SharedData.BEDROCK;
                 } else {
-                    int n = rng.nextInt(100);
-                    if (n < 5) map[x][y] = SharedData.STONE;
-                    else if (n < 8) map[x][y] = SharedData.WOOD;
-                    else if (n < 20) map[x][y] = SharedData.DIRT;
+                    int n = rng.nextInt(1000);
+                    if (n < 5) map[x][y] = SharedData.DIAMOND_ORE;
+                    else if (n < 15) map[x][y] = SharedData.GOLD_ORE;
+                    else if (n < 40) map[x][y] = SharedData.IRON_ORE;
+                    else if (n < 100) map[x][y] = SharedData.STONE;
+                    else if (n < 130) map[x][y] = SharedData.WOOD;
+                    else if (n < 250) map[x][y] = SharedData.DIRT;
                     else map[x][y] = SharedData.AIR;
                 }
             }
@@ -214,7 +220,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
 
         // 4. Mining Logic
-        if (!isInventoryOpen) handleMiningAndPlacing();
+        if (!isInventoryOpen && !isCraftingOpen) handleMiningAndPlacing();
         
         repaint();
     }
@@ -264,7 +270,15 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 if (miningProgress >= prop.toughness && prop.toughness != -1) {
                     map[gridX][gridY] = SharedData.AIR;
                     money += prop.value;
+
+                    int dropID = blockID;
+                    if (blockID == SharedData.IRON_ORE) dropID = 201; // Iron Ingot
+                    else if (blockID == SharedData.GOLD_ORE) dropID = 202; // Gold Ingot
+                    else if (blockID == SharedData.DIAMOND_ORE) dropID = 203; // Diamond
+
+                    addToInventory(dropID);
                     saveMoney();
+                    saveInventory();
                     if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + SharedData.AIR);
                     miningProgress = 0;
                 }
@@ -285,14 +299,21 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
             miningProgress = 0;
         }
 
-        // --- PLACING (Right Click) ---
+        // --- PLACING / INTERACTION (Right Click) ---
         if (isRightMousePressed) {
-            if (blockID == SharedData.AIR && heldItem.isBlock()) {
+            if (blockID == SharedData.CRAFTER) {
+                isCraftingOpen = true;
+                isRightMousePressed = false;
+                return;
+            }
+            if (blockID == SharedData.AIR && heldItem.isBlock() && heldItemID != 0) {
                 Rectangle pRect = new Rectangle(playerX, playerY, PLAYER_SIZE, PLAYER_SIZE);
                 Rectangle bRect = new Rectangle(gridX * 32, gridY * 32, 32, 32);
 
                 if (!pRect.intersects(bRect)) {
                     map[gridX][gridY] = heldItemID;
+                    inventory.setItem(selectedSlot, 0); // Consume item!
+                    saveInventory();
                     if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + heldItemID);
                     isRightMousePressed = false;
                 }
@@ -454,6 +475,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
 
         if (isInventoryOpen) drawInventory(g);
+        if (isCraftingOpen) drawCrafting(g);
 
         // --- Mining Progress Bar ---
         if (miningProgress > 0) {
@@ -485,35 +507,61 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
 
     private void drawInventory(Graphics g) {
-        int rows = 4, cols = 8;
+        drawSlots(g, 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2);
+        drawDraggingItem(g);
+    }
+
+    private void drawCrafting(Graphics g) {
+        int invX = (getWidth() - 8 * 55) / 2;
+        int invY = (getHeight() - 4 * 55) / 2 + 100;
+
+        // Draw Main Inventory below crafting
+        drawSlots(g, 0, 32, 4, 8, invX, invY);
+
+        // Draw Crafting Grid (3x3)
+        int gridX = (getWidth() - 3 * 55) / 2 - 100;
+        int gridY = (getHeight() - 4 * 55) / 2 - 50;
+        g.setColor(Color.WHITE);
+        g.drawString("Crafting", gridX, gridY - 10);
+        drawSlots(g, 32, 9, 3, 3, gridX, gridY);
+
+        // Draw Arrow
+        g.drawString("->", gridX + 3 * 55 + 20, gridY + 1 * 55 + 25);
+
+        // Draw Output
+        drawSlots(g, 41, 1, 1, 1, gridX + 3 * 55 + 60, gridY + 1 * 55);
+
+        drawDraggingItem(g);
+    }
+
+    private void drawSlots(Graphics g, int startIdx, int count, int rows, int cols, int xOff, int yOff) {
         int slotSize = 50, gap = 5;
         int invWidth = cols * (slotSize + gap);
         int invHeight = rows * (slotSize + gap);
-        int startX = (getWidth() - invWidth) / 2;
-        int startY = (getHeight() - invHeight) / 2;
 
         g.setColor(new Color(0, 0, 0, 200));
-        g.fillRect(startX - 10, startY - 10, invWidth + 20, invHeight + 20);
+        g.fillRect(xOff - 10, yOff - 10, invWidth + 20, invHeight + 20);
 
-        for (int i = 0; i < inventory.getSize(); i++) {
+        for (int i = 0; i < count; i++) {
             int r = i / cols;
             int c = i % cols;
-            int x = startX + c * (slotSize + gap);
-            int y = startY + r * (slotSize + gap);
+            int x = xOff + c * (slotSize + gap);
+            int y = yOff + r * (slotSize + gap);
 
             g.setColor(Color.GRAY);
             g.fillRect(x, y, slotSize, slotSize);
             g.setColor(Color.WHITE);
             g.drawRect(x, y, slotSize, slotSize);
 
-            int itemId = inventory.getItem(i);
+            int itemId = inventory.getItem(startIdx + i);
             SharedData.ItemProp prop = SharedData.getItem(itemId);
             if (prop.texture != null) {
                 g.drawImage(prop.texture, x + 5, y + 5, 40, 40, null);
             }
         }
+    }
 
-        // Draw dragging item
+    private void drawDraggingItem(Graphics g) {
         if (draggingSlot != -1) {
             int itemId = inventory.getItem(draggingSlot);
             SharedData.ItemProp prop = SharedData.getItem(itemId);
@@ -542,39 +590,54 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     // --- Inputs ---
     public void mousePressed(MouseEvent e) {
         if (isInventoryOpen) {
-            // Drag start
-            int rows = 4, cols = 8;
-            int slotSize = 50, gap = 5;
-            int invWidth = cols * (slotSize + gap);
-            int invHeight = rows * (slotSize + gap);
-            int startX = (getWidth() - invWidth) / 2;
-            int startY = (getHeight() - invHeight) / 2;
+            draggingSlot = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2);
+            return;
+        }
+        if (isCraftingOpen) {
+            int invX = (getWidth() - 8 * 55) / 2;
+            int invY = (getHeight() - 4 * 55) / 2 + 100;
+            draggingSlot = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, invX, invY);
+            if (draggingSlot != -1) return;
 
-            int c = (e.getX() - startX) / (slotSize + gap);
-            int r = (e.getY() - startY) / (slotSize + gap);
-            if (c >= 0 && c < cols && r >= 0 && r < rows) {
-                draggingSlot = r * cols + c;
-            }
+            int gridX = (getWidth() - 3 * 55) / 2 - 100;
+            int gridY = (getHeight() - 4 * 55) / 2 - 50;
+            draggingSlot = getSlotAt(e.getX(), e.getY(), 32, 9, 3, 3, gridX, gridY);
+            if (draggingSlot != -1) return;
+
+            draggingSlot = getSlotAt(e.getX(), e.getY(), 41, 1, 1, 1, gridX + 3 * 55 + 60, gridY + 1 * 55);
             return;
         }
         if (e.getButton() == MouseEvent.BUTTON1) isLeftMousePressed = true;
         if (e.getButton() == MouseEvent.BUTTON3) isRightMousePressed = true;
     }
     public void mouseReleased(MouseEvent e) {
-        if (isInventoryOpen && draggingSlot != -1) {
-            // Drop
-            int rows = 4, cols = 8;
-            int slotSize = 50, gap = 5;
-            int invWidth = cols * (slotSize + gap);
-            int invHeight = rows * (slotSize + gap);
-            int startX = (getWidth() - invWidth) / 2;
-            int startY = (getHeight() - invHeight) / 2;
+        if ((isInventoryOpen || isCraftingOpen) && draggingSlot != -1) {
+            int targetSlot = -1;
+            if (isInventoryOpen) {
+                targetSlot = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2);
+            } else if (isCraftingOpen) {
+                int invX = (getWidth() - 8 * 55) / 2;
+                int invY = (getHeight() - 4 * 55) / 2 + 100;
+                targetSlot = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, invX, invY);
+                if (targetSlot == -1) {
+                    int gridX = (getWidth() - 3 * 55) / 2 - 100;
+                    int gridY = (getHeight() - 4 * 55) / 2 - 50;
+                    targetSlot = getSlotAt(e.getX(), e.getY(), 32, 9, 3, 3, gridX, gridY);
+                }
+            }
 
-            int c = (e.getX() - startX) / (slotSize + gap);
-            int r = (e.getY() - startY) / (slotSize + gap);
-            if (c >= 0 && c < cols && r >= 0 && r < rows) {
-                int targetSlot = r * cols + c;
-                inventory.swap(draggingSlot, targetSlot);
+            if (targetSlot != -1 && targetSlot != 41) { // Cannot drop into output slot
+                if (draggingSlot == 41) {
+                    // Take from output: consume ingredients
+                    if (inventory.getItem(targetSlot) == 0) {
+                        inventory.setItem(targetSlot, inventory.getItem(41));
+                        consumeIngredients();
+                    }
+                } else {
+                    inventory.swap(draggingSlot, targetSlot);
+                }
+                if (isCraftingOpen) updateCrafting();
+                saveInventory();
             }
             draggingSlot = -1;
             repaint();
@@ -600,9 +663,18 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
             repaint();
         }
         if (k == KeyEvent.VK_E) {
-            isInventoryOpen = !isInventoryOpen;
+            if (isCraftingOpen) {
+                isCraftingOpen = false;
+            } else {
+                isInventoryOpen = !isInventoryOpen;
+            }
             isLeftMousePressed = false;
             isRightMousePressed = false;
+            repaint();
+        }
+        if (k == KeyEvent.VK_ESCAPE) {
+            isInventoryOpen = false;
+            isCraftingOpen = false;
             repaint();
         }
         if (k == KeyEvent.VK_F11) {
@@ -625,9 +697,27 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
     }
 
+    private void addToInventory(int id) {
+        if (id == 0) return;
+        for (int i = 0; i < 32; i++) {
+            if (inventory.getItem(i) == 0) {
+                inventory.setItem(i, id);
+                return;
+            }
+        }
+    }
+
     private void saveMoney() {
         try (PrintWriter pw = new PrintWriter(new FileWriter("money.txt"))) {
             pw.println(money);
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    private void saveInventory() {
+        try (PrintWriter pw = new PrintWriter(new FileWriter("inventory.txt"))) {
+            for (int i = 0; i < 32; i++) {
+                pw.println(inventory.getItem(i));
+            }
         } catch (IOException e) { e.printStackTrace(); }
     }
 
@@ -638,6 +728,81 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 money = Integer.parseInt(br.readLine());
             } catch (Exception e) { e.printStackTrace(); }
         }
+    }
+
+    private void loadInventory() {
+        File f = new File("inventory.txt");
+        if (f.exists()) {
+            try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+                for (int i = 0; i < 32; i++) {
+                    String line = br.readLine();
+                    if (line != null) inventory.setItem(i, Integer.parseInt(line));
+                }
+            } catch (Exception e) { e.printStackTrace(); }
+        }
+    }
+
+    private int getSlotAt(int mx, int my, int startIdx, int count, int rows, int cols, int startX, int startY) {
+        int slotSize = 50, gap = 5;
+        int c = (mx - startX) / (slotSize + gap);
+        int r = (my - startY) / (slotSize + gap);
+        if (c >= 0 && c < cols && r >= 0 && r < rows) {
+            int idx = r * cols + c;
+            if (idx < count) return startIdx + idx;
+        }
+        return -1;
+    }
+
+    private void updateCrafting() {
+        int[] g = new int[9];
+        for (int i = 0; i < 9; i++) g[i] = inventory.getItem(32 + i);
+
+        inventory.setItem(41, 0); // Default empty
+
+        // 1. Planks (1 Log anywhere)
+        int logs = 0;
+        for(int i=0; i<9; i++) if(g[i] == SharedData.WOOD) logs++;
+        if(logs == 1 && countItems(g) == 1) { inventory.setItem(41, SharedData.PLANKS); return; }
+
+        // 2. Sticks (2 Planks vertical)
+        for(int i=0; i<6; i++) {
+            if(g[i] == SharedData.PLANKS && g[i+3] == SharedData.PLANKS && countItems(g) == 2) {
+                inventory.setItem(41, 200); return;
+            }
+        }
+
+        // 3. Tools
+        checkToolRecipe(g, "SWORD", new int[]{100, 101, 102, 103, 104});
+        checkToolRecipe(g, "SHOVEL", new int[]{130, 131, 132, 133, 134});
+        checkToolRecipe(g, "PICKAXE", new int[]{110, 111, 112, 113, 114});
+        checkToolRecipe(g, "AXE", new int[]{120, 121, 122, 123, 124});
+    }
+
+    private int countItems(int[] g) {
+        int c = 0;
+        for(int i : g) if(i != 0) c++;
+        return c;
+    }
+
+    private void checkToolRecipe(int[] g, String type, int[] outputIDs) {
+        int stick = 200;
+        int[] mats = {SharedData.PLANKS, SharedData.STONE, 201, 202, 203}; // Wood, Stone, Iron, Gold, Diamond
+
+        for (int i = 0; i < 5; i++) {
+            int m = mats[i];
+            boolean match = false;
+            if(type.equals("SWORD")) match = (g[1]==m && g[4]==m && g[7]==stick && countItems(g)==3);
+            else if(type.equals("SHOVEL")) match = (g[1]==m && g[4]==stick && g[7]==stick && countItems(g)==3);
+            else if(type.equals("PICKAXE")) match = (g[0]==m && g[1]==m && g[2]==m && g[4]==stick && g[7]==stick && countItems(g)==5);
+            else if(type.equals("AXE")) match = (g[0]==m && g[1]==m && g[3]==m && g[4]==stick && g[7]==stick && countItems(g)==5);
+
+            if(match) { inventory.setItem(41, outputIDs[i]); return; }
+        }
+    }
+
+    private void consumeIngredients() {
+        for(int i=32; i<=40; i++) inventory.setItem(i, 0);
+        updateCrafting();
     }
 
     private void toggleFullscreen() {

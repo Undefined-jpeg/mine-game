@@ -32,4 +32,8 @@ public class Inventory implements Serializable {
             slots[j] = temp;
         }
     }
+
+    public void clear(int index) {
+        if (index >= 0 && index < size) slots[index] = 0;
+    }
 }

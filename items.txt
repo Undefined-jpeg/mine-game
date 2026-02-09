@@ -18,3 +18,7 @@
 132,Iron Shovel,SHOVEL,3,iron_shovel.png
 133,Gold Shovel,SHOVEL,4,gold_shovel.png
 134,Diamond Shovel,SHOVEL,5,diamond_shovel.png
+200,Stick,ITEM,0,stick.png
+201,Iron Ingot,ITEM,0,iron_ingot.png
+202,Gold Ingot,ITEM,0,gold_ingot.png
+203,Diamond,ITEM,0,diamond.png
