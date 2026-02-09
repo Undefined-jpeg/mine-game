@@ -66,6 +66,18 @@ public class GameServer {
                         // Player money update: "MONEY balance"
                         broadcast("MONEY " + id + " " + parts[1], id);
                     }
+                    else if (command.equals("COLOR")) {
+                        // Player color update: "COLOR r g b"
+                        broadcast("COLOR " + id + " " + parts[1] + " " + parts[2] + " " + parts[3], id);
+                    }
+                    else if (command.equals("DROP")) {
+                        // "DROP id x y"
+                        broadcast(line, id);
+                    }
+                    else if (command.equals("CONT")) {
+                        // "CONT x y slot id count data"
+                        broadcast(line, id);
+                    }
                     else if (command.equals("BLOCK")) {
                         // Block changed: "BLOCK x y type"
                         // Tell everyone to update their map

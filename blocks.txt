@@ -9,3 +9,5 @@
 8,Gold Ore,100,gold_ore.png,50
 9,Diamond Ore,150,diamond_ore.png,100
 10,Furnace,50,furnace.png,15
+11,Chest,30,chest.png,20
+12,Hulcs,40,hulcs.png,50

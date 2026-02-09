@@ -23,6 +23,25 @@ public class SharedData {
     public static final int GOLD_ORE = 8;
     public static final int DIAMOND_ORE = 9;
     public static final int FURNACE = 10;
+    public static final int CHEST = 11;
+    public static final int HULCS = 12;
+
+    public static final Color[] PLAYER_COLORS = {
+        Color.decode("#FF0000"), // Red
+        Color.decode("#0000FF"), // Blue
+        Color.decode("#00FF00"), // Green
+        Color.decode("#FFFF00"), // Yellow
+        Color.decode("#FF7F00"), // Orange
+        Color.decode("#800080"), // Purple
+        Color.decode("#00FFFF"), // Cyan
+        Color.decode("#FF00FF"), // Pink
+        Color.decode("#BFFF00"), // Lime
+        Color.decode("#8B4513")  // Brown
+    };
+
+    public static final String[] COLOR_NAMES = {
+        "Red", "Blue", "Green", "Yellow", "Orange", "Purple", "Cyan", "Pink", "Lime", "Brown"
+    };
 
     private static Map<Integer, ItemProp> items = new HashMap<>();
 
@@ -80,7 +99,7 @@ public class SharedData {
         public int tier;
         public int value;
         public BufferedImage texture;
-        
+
         public ItemProp(String n, int id, int t, String texName, String type, int tier, int value) {
             this.name = n; this.id = id; this.toughness = t; this.textureName = texName;
             this.type = type; this.tier = tier; this.value = value;
