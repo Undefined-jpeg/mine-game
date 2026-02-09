@@ -1,18 +1,36 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.net.URL;
 
 public class GameServer {
     private static final Map<Integer, PrintWriter> clients = new HashMap<>();
     private static int nextPlayerId = 1;
 
     public static void main(String[] args) throws IOException {
+        System.out.println("---------------------------------------");
+        System.out.println("🌍 MINING GAME SERVER 🌍");
+        System.out.println("---------------------------------------");
         System.out.println("Starting Server on port " + SharedData.PORT + "...");
+
         try {
-            System.out.println("Local IP: " + InetAddress.getLocalHost().getHostAddress());
+            System.out.println("🏠 Local IP: " + InetAddress.getLocalHost().getHostAddress());
         } catch (Exception e) {
-            System.out.println("Could not determine local IP.");
+            System.out.println("❌ Could not determine local IP.");
         }
+
+        new Thread(() -> {
+            try {
+                URL whatismyip = new URL("https://checkip.amazonaws.com");
+                BufferedReader in = new BufferedReader(new InputStreamReader(whatismyip.openStream()));
+                String ip = in.readLine();
+                System.out.println("🌐 Public IP: " + ip);
+                System.out.println("📢 Share this Public IP with your friends!");
+                System.out.println("⚠️  Note: You MUST enable Port Forwarding for port " + SharedData.PORT + " on your router.");
+            } catch (Exception e) {
+                System.out.println("🌐 Public IP: Could not be determined automatically.");
+            }
+        }).start();
 
         ServerSocket serverSocket = new ServerSocket(SharedData.PORT);
 

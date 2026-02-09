@@ -78,6 +78,8 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private int health = 100;
     private int money = 0;
     private Color playerColor = Color.RED;
+    private String serverIP = "Singleplayer";
+    private boolean isConnected = false;
     private boolean isFullscreen = false;
     private JFrame frame;
 
@@ -123,6 +125,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private void connectToServer() {
         String ip = JOptionPane.showInputDialog(null, "Enter server IP:", "localhost");
         if (ip == null || ip.isEmpty()) ip = "localhost";
+        this.serverIP = ip;
         String colorName = (String) JOptionPane.showInputDialog(null, "Choose your color:", "Color Selection",
                 JOptionPane.QUESTION_MESSAGE, null, SharedData.COLOR_NAMES, SharedData.COLOR_NAMES[0]);
         if (colorName != null) {
@@ -134,13 +137,20 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
             socket = new Socket(ip, SharedData.PORT);
             out = new PrintWriter(socket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            isConnected = true;
             new Thread(() -> {
                 try {
                     String line;
                     while ((line = in.readLine()) != null) processServerMessage(line);
-                } catch (IOException e) { e.printStackTrace(); }
+                } catch (IOException e) {
+                    isConnected = false;
+                    e.printStackTrace();
+                }
             }).start();
-        } catch (IOException e) { System.out.println("Playing in Singleplayer (No Server Found)"); }
+        } catch (IOException e) {
+            isConnected = false;
+            System.out.println("Playing in Singleplayer (No Server Found)");
+        }
     }
 
     private void loadAssets() {
@@ -358,6 +368,17 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
 
     private void drawHUD(Graphics g) {
         g.setColor(Color.WHITE); g.setFont(new Font("Arial", Font.BOLD, 20)); g.drawString("Money: $" + money, 20, 30);
+
+        // Connection Info
+        g.setFont(new Font("Arial", Font.PLAIN, 14));
+        if (isConnected) {
+            g.setColor(Color.GREEN);
+            g.drawString("● Connected: " + serverIP, 20, 55);
+        } else {
+            g.setColor(Color.RED);
+            g.drawString("○ Offline (" + serverIP + ")", 20, 55);
+        }
+
         int hotbarSlots = 8; int barWidth = hotbarSlots * 60; int startX = (getWidth() - barWidth) / 2; int startY = getHeight() - 80;
         for (int i = 0; i < 10; i++) {
             int hx = startX + (i * 20); int hy = startY - 30;
