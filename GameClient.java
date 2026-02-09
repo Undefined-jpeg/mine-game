@@ -66,6 +66,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private int selectedSlot = 0; 
     private boolean isInventoryOpen = false;
     private boolean isCraftingOpen = false;
+    private boolean isRecipeBookOpen = false;
     private int draggingItem = 0;
     private int draggingCount = 0;
     private int draggingData = 0;
@@ -368,6 +369,10 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
 
     private void drawHUD(Graphics g) {
         g.setColor(Color.WHITE); g.setFont(new Font("Arial", Font.BOLD, 20)); g.drawString("Money: $" + money, 20, 30);
+        if (isInventoryOpen || isCraftingOpen) {
+            g.setColor(Color.WHITE); g.setFont(new Font("Arial", Font.BOLD, 14));
+            g.drawString("[R] Recipe Book: " + (isRecipeBookOpen ? "ON" : "OFF"), 20, 80);
+        }
 
         // Connection Info
         g.setFont(new Font("Arial", Font.PLAIN, 14));
@@ -400,6 +405,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
         if (isInventoryOpen) drawInventory(g);
         if (isCraftingOpen) drawCrafting(g);
+        if ((isInventoryOpen || isCraftingOpen) && isRecipeBookOpen) drawRecipeBook(g);
         if (openFurnacePos != null) drawFurnace(g);
         if (openContainerPos != null) drawContainer(g);
         if (miningProgress > 0) {
@@ -411,6 +417,42 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                         float percent = Math.min(1.0f, miningProgress / prop.toughness); int pWidth = 200; int px = (getWidth() - pWidth) / 2; int py = startY + 65;
                         g.setColor(Color.BLACK); g.fillRect(px, py, pWidth, 15); g.setColor(Color.GREEN); g.fillRect(px + 2, py + 2, (int)((pWidth - 4) * percent), 11); g.setColor(Color.WHITE); g.drawRect(px, py, pWidth, 15);
                     }
+                }
+            }
+        }
+    }
+
+    private void drawRecipeBook(Graphics g) {
+        int rbW = 300; int rbH = 500;
+        int rbX = 20; int rbY = 100;
+        g.setColor(new Color(0, 0, 0, 220));
+        g.fillRoundRect(rbX, rbY, rbW, rbH, 10, 10);
+        g.setColor(Color.WHITE);
+        g.drawRoundRect(rbX, rbY, rbW, rbH, 10, 10);
+        g.drawString("Crafting Recipes", rbX + 10, rbY + 25);
+
+        for (int i = 0; i < SharedData.recipes.size(); i++) {
+            SharedData.Recipe r = SharedData.recipes.get(i);
+            int rx = rbX + 10; int ry = rbY + 40 + i * 45;
+            if (ry + 40 > rbY + rbH) break; // Simple clipping
+
+            SharedData.ItemProp result = SharedData.getItem(r.resultID);
+            if (result.texture != null) g.drawImage(result.texture, rx, ry, 32, 32, null);
+            g.drawString(result.name + (r.resultCount > 1 ? " x" + r.resultCount : ""), rx + 40, ry + 20);
+
+            // Draw mini pattern
+            int pSize = 10;
+            for (int k = 0; k < r.pattern.length; k++) {
+                int cols = r.is2x2 ? 2 : 3;
+                int px = rx + 200 + (k % cols) * (pSize + 2);
+                int py = ry + (k / cols) * (pSize + 2);
+                if (r.pattern[k] != 0) {
+                    SharedData.ItemProp ing = SharedData.getItem(r.pattern[k]);
+                    if (ing.texture != null) g.drawImage(ing.texture, px, py, pSize, pSize, null);
+                    else { g.setColor(Color.GRAY); g.fillRect(px, py, pSize, pSize); }
+                } else {
+                    g.setColor(new Color(255,255,255,40));
+                    g.drawRect(px, py, pSize, pSize);
                 }
             }
         }
@@ -577,9 +619,13 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         if (k == KeyEvent.VK_E) {
             if (isCraftingOpen || openFurnacePos != null || openContainerPos != null) { isCraftingOpen = false; openFurnacePos = null; openContainerPos = null; }
             else isInventoryOpen = !isInventoryOpen;
+            if (!isInventoryOpen && !isCraftingOpen) isRecipeBookOpen = false;
             isLeftMousePressed = false; isRightMousePressed = false; repaint();
         }
-        if (k == KeyEvent.VK_ESCAPE) { isInventoryOpen = false; isCraftingOpen = false; openFurnacePos = null; openContainerPos = null; repaint(); }
+        if (k == KeyEvent.VK_R) {
+            if (isInventoryOpen || isCraftingOpen) { isRecipeBookOpen = !isRecipeBookOpen; repaint(); }
+        }
+        if (k == KeyEvent.VK_ESCAPE) { isInventoryOpen = false; isCraftingOpen = false; isRecipeBookOpen = false; openFurnacePos = null; openContainerPos = null; repaint(); }
         if (k == KeyEvent.VK_F11) toggleFullscreen();
         if (k == KeyEvent.VK_Q) {
             long now = System.currentTimeMillis();
@@ -625,32 +671,27 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         return -1;
     }
     private void updateCrafting() {
-        int[] g3 = new int[9]; for (int i = 0; i < 9; i++) g3[i] = inventory.getItem(32 + i); inventory.clear(41);
-        if (checkPlanks(g3, 41)) {} else if (checkSticks(g3, 41)) {} else if (checkCrafter(g3, 41)) {}
-        else { checkToolRecipe(g3, "SWORD", new int[]{100, 101, 102, 103, 104}, 41); checkToolRecipe(g3, "SHOVEL", new int[]{130, 131, 132, 133, 134}, 41);
-               checkToolRecipe(g3, "PICKAXE", new int[]{110, 111, 112, 113, 114}, 41); checkToolRecipe(g3, "AXE", new int[]{120, 121, 122, 123, 124}, 41); }
+        // 3x3 Table
+        int[] g3 = new int[9]; for (int i = 0; i < 9; i++) g3[i] = inventory.getItem(32 + i);
+        inventory.clear(41);
+        for (SharedData.Recipe r : SharedData.recipes) {
+            if (!r.is2x2 && Arrays.equals(g3, r.pattern)) { inventory.setItem(41, r.resultID, r.resultCount); break; }
+            if (r.is2x2) {
+                // Try to match 2x2 in 3x3 at different offsets?
+                // For simplicity, we just check fixed top-left for now or exact matches.
+                int[] sub = new int[]{g3[0], g3[1], g3[3], g3[4]};
+                if (Arrays.equals(sub, r.pattern) && countItems(g3) == countItems(sub)) { inventory.setItem(41, r.resultID, r.resultCount); break; }
+            }
+        }
 
-        int[] g2 = new int[4]; for (int i = 0; i < 4; i++) g2[i] = inventory.getItem(42 + i); inventory.clear(46);
-        if (checkPlanks(g2, 46)) {} else if (checkSticks2x2(g2, 46)) {} else if (checkCrafter2x2(g2, 46)) {}
-    }
-    private int countItems(int[] g) { int c = 0; for(int i : g) if(i != 0) c++; return c; }
-    private boolean checkPlanks(int[] g, int outSlot) { int logs = 0; for(int i=0; i<g.length; i++) if(g[i] == SharedData.WOOD) logs++; if(logs == 1 && countItems(g) == 1) { inventory.setItem(outSlot, SharedData.PLANKS, 4); return true; } return false; }
-    private boolean checkSticks(int[] g, int outSlot) { for(int i=0; i<6; i++) { if(g[i] == SharedData.PLANKS && g[i+3] == SharedData.PLANKS && countItems(g) == 2) { inventory.setItem(outSlot, 200, 4); return true; } } return false; }
-    private boolean checkCrafter(int[] g, int outSlot) { if (g[0]==SharedData.PLANKS && g[1]==SharedData.PLANKS && g[3]==SharedData.PLANKS && g[4]==SharedData.PLANKS && countItems(g)==4) { inventory.setItem(outSlot, SharedData.CRAFTER, 1); return true; } return false; }
-    private boolean checkSticks2x2(int[] g, int outSlot) { if ((g[0]==SharedData.PLANKS && g[2]==SharedData.PLANKS && countItems(g)==2) || (g[1]==SharedData.PLANKS && g[3]==SharedData.PLANKS && countItems(g)==2)) { inventory.setItem(outSlot, 200, 4); return true; } return false; }
-    private boolean checkCrafter2x2(int[] g, int outSlot) { if (g[0]==SharedData.PLANKS && g[1]==SharedData.PLANKS && g[2]==SharedData.PLANKS && g[3]==SharedData.PLANKS && countItems(g)==4) { inventory.setItem(outSlot, SharedData.CRAFTER, 1); return true; } return false; }
-
-    private void checkToolRecipe(int[] g, String type, int[] outputIDs, int outSlot) {
-        int stick = 200; int[] mats = {SharedData.PLANKS, SharedData.STONE, 201, 202, 203};
-        for (int i = 0; i < 5; i++) {
-            int m = mats[i]; boolean match = false;
-            if(type.equals("SWORD")) match = (g[1]==m && g[4]==m && g[7]==stick && countItems(g)==3);
-            else if(type.equals("SHOVEL")) match = (g[1]==m && g[4]==stick && g[7]==stick && countItems(g)==3);
-            else if(type.equals("PICKAXE")) match = (g[0]==m && g[1]==m && g[2]==m && g[4]==stick && g[7]==stick && countItems(g)==5);
-            else if(type.equals("AXE")) match = (g[0]==m && g[1]==m && g[3]==m && g[4]==stick && g[7]==stick && countItems(g)==5);
-            if(match) { inventory.setItem(outSlot, outputIDs[i], 1); return; }
+        // 2x2 Personal
+        int[] g2 = new int[4]; for (int i = 0; i < 4; i++) g2[i] = inventory.getItem(42 + i);
+        inventory.clear(46);
+        for (SharedData.Recipe r : SharedData.recipes) {
+            if (r.is2x2 && Arrays.equals(g2, r.pattern)) { inventory.setItem(46, r.resultID, r.resultCount); break; }
         }
     }
+    private int countItems(int[] g) { int c = 0; for(int i : g) if(i != 0) c++; return c; }
     private void consumeIngredients() {
         for(int i=32; i<=40; i++) { if (inventory.getItem(i) != 0) inventory.removeItems(i, 1); }
         for(int i=42; i<=45; i++) { if (inventory.getItem(i) != 0) inventory.removeItems(i, 1); }

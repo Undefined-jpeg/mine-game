@@ -85,6 +85,48 @@ public class SharedData {
         return items.getOrDefault(id, new ItemProp("Air", 0, 0, null, "AIR", 0, 0));
     }
 
+    public static java.util.List<Recipe> recipes = new ArrayList<>();
+
+    static {
+        // Planks
+        recipes.add(new Recipe(new int[]{WOOD, 0, 0, 0}, PLANKS, 4, true));
+        // Sticks
+        recipes.add(new Recipe(new int[]{PLANKS, 0, PLANKS, 0}, 200, 4, true));
+        // Crafter
+        recipes.add(new Recipe(new int[]{PLANKS, PLANKS, PLANKS, PLANKS}, CRAFTER, 1, true));
+
+        // 3x3 Only recipes (Tools)
+        int stick = 200;
+        int[] mats = {PLANKS, STONE, 201, 202, 203}; // Wood, Stone, Iron, Gold, Diamond
+        int[] swords = {100, 101, 102, 103, 104};
+        int[] shovels = {130, 131, 132, 133, 134};
+        int[] pickaxes = {110, 111, 112, 113, 114};
+        int[] axes = {120, 121, 122, 123, 124};
+
+        for (int i = 0; i < 5; i++) {
+            int m = mats[i];
+            // Sword
+            recipes.add(new Recipe(new int[]{0,m,0, 0,m,0, 0,stick,0}, swords[i], 1, false));
+            // Shovel
+            recipes.add(new Recipe(new int[]{0,m,0, 0,stick,0, 0,stick,0}, shovels[i], 1, false));
+            // Pickaxe
+            recipes.add(new Recipe(new int[]{m,m,m, 0,stick,0, 0,stick,0}, pickaxes[i], 1, false));
+            // Axe
+            recipes.add(new Recipe(new int[]{m,m,0, m,stick,0, 0,stick,0}, axes[i], 1, false));
+        }
+    }
+
+    public static class Recipe {
+        public int[] pattern; // 4 for 2x2, 9 for 3x3
+        public int resultID;
+        public int resultCount;
+        public boolean is2x2;
+
+        public Recipe(int[] p, int rID, int rC, boolean is2x2) {
+            this.pattern = p; this.resultID = rID; this.resultCount = rC; this.is2x2 = is2x2;
+        }
+    }
+
     // Keep for backward compatibility if needed, but redirects to getItem
     public static ItemProp getBlock(int id) {
         return getItem(id);
