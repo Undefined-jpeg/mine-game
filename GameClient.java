@@ -17,7 +17,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     
     // --- Game World ---
     private int[][] map = new int[SharedData.MAP_SIZE][SharedData.MAP_SIZE];
-    private Map<Integer, PlayerData> otherPlayers = new HashMap<>();
+    private Map<Integer, PlayerData> otherPlayers = new java.util.concurrent.ConcurrentHashMap<>();
 
     private static class PlayerData {
         Point pos;
@@ -47,11 +47,11 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
     }
 
-    private Map<Point, FurnaceData> furnaces = new HashMap<>();
-    private Map<Point, Inventory> containers = new HashMap<>();
-    private Map<Integer, Inventory> hulcsStore = new HashMap<>();
+    private Map<Point, FurnaceData> furnaces = new java.util.concurrent.ConcurrentHashMap<>();
+    private Map<Point, Inventory> containers = new java.util.concurrent.ConcurrentHashMap<>();
+    private Map<Integer, Inventory> hulcsStore = new java.util.concurrent.ConcurrentHashMap<>();
     private int nextHulcsID = 1;
-    private List<DroppedItem> droppedItems = new ArrayList<>();
+    private List<DroppedItem> droppedItems = new java.util.concurrent.CopyOnWriteArrayList<>();
     private Point openFurnacePos = null;
     private Point openContainerPos = null;
 

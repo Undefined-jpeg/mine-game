@@ -8,7 +8,7 @@ public class SharedData {
     // --- Configuration ---
     public static final int MAP_SIZE = 1024;
     public static final int TILE_SIZE = 32;
-    public static final int PORT = 9999;
+    public static final int PORT = 25565;
     public static final long MAP_SEED = 12345;
 
     // --- Block IDs ---
