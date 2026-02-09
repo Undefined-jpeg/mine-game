@@ -62,7 +62,7 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     private static final int PLAYER_SIZE = 20; 
 
     // --- Inventory ---
-    private Inventory inventory = new Inventory(42);
+    private Inventory inventory = new Inventory(47); // 32 inv + 9 crafting + 1 output + 4 personal + 1 p-output
     private int selectedSlot = 0; 
     private boolean isInventoryOpen = false;
     private boolean isCraftingOpen = false;
@@ -213,12 +213,12 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 if (x == 0 || x == SharedData.MAP_SIZE - 1 || y == 0 || y == SharedData.MAP_SIZE - 1) { map[x][y] = SharedData.BEDROCK; }
                 else {
                     int n = rng.nextInt(1000);
-                    if (n < 5) map[x][y] = SharedData.DIAMOND_ORE;
-                    else if (n < 15) map[x][y] = SharedData.GOLD_ORE;
-                    else if (n < 40) map[x][y] = SharedData.IRON_ORE;
-                    else if (n < 100) map[x][y] = SharedData.STONE;
-                    else if (n < 130) map[x][y] = SharedData.WOOD;
-                    else if (n < 250) map[x][y] = SharedData.DIRT;
+                    if (n < 3) map[x][y] = SharedData.DIAMOND_ORE;
+                    else if (n < 10) map[x][y] = SharedData.GOLD_ORE;
+                    else if (n < 30) map[x][y] = SharedData.IRON_ORE;
+                    else if (n < 70) map[x][y] = SharedData.STONE;
+                    else if (n < 90) map[x][y] = SharedData.WOOD;
+                    else if (n < 150) map[x][y] = SharedData.DIRT;
                     else map[x][y] = SharedData.AIR;
                 }
             }
@@ -416,7 +416,22 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         }
     }
 
-    private void drawInventory(Graphics g) { drawSlots(g, 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2); drawDraggingItem(g); }
+    private void drawInventory(Graphics g) {
+        int invX = (getWidth() - 8 * 55) / 2;
+        int invY = (getHeight() - 4 * 55) / 2;
+        drawSlots(g, 0, 32, 4, 8, invX, invY);
+
+        // Personal Crafting (2x2)
+        int pcX = invX + 8 * 55 + 20;
+        int pcY = invY;
+        g.setColor(Color.WHITE);
+        g.drawString("Crafting", pcX, pcY - 10);
+        drawSlots(g, 42, 4, 2, 2, pcX, pcY);
+        g.drawString("->", pcX + 2 * 55 + 10, pcY + 25);
+        drawSlots(g, 46, 1, 1, 1, pcX + 2 * 55 + 40, pcY + 15);
+
+        drawDraggingItem(g);
+    }
     private void drawFurnace(Graphics g) {
         int invX = (getWidth() - 8 * 55) / 2; int invY = (getHeight() - 4 * 55) / 2 + 100; drawSlots(g, 0, 32, 4, 8, invX, invY);
         int fX = (getWidth() - 100) / 2; int fY = (getHeight() - 200) / 2 - 50;
@@ -490,31 +505,31 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 if (getSlotAt(e.getX(), e.getY(), 0, 1, 1, 1, fX, fY) != -1) { slot = 0; targetInv = fd.inv; }
                 else if (getSlotAt(e.getX(), e.getY(), 1, 1, 1, 1, fX, fY + 60) != -1) { slot = 1; targetInv = fd.inv; }
                 else if (getSlotAt(e.getX(), e.getY(), 2, 1, 1, 1, fX + 60, fY + 30) != -1) { slot = 2; targetInv = fd.inv; }
-                else { targetInv = this.inventory; slot = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2 + 100); }
+                else { targetInv = this.inventory; slot = findSlotAt(e.getX(), e.getY()); }
             }
             if (openContainerPos != null && slot == -1) {
                 int cX = (getWidth() - 8 * 55) / 2; int cY = (getHeight() - 4 * 55) / 2 - 120;
                 Inventory inv = containers.get(openContainerPos);
                 int s = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, cX, cY);
                 if (s != -1) { slot = s; targetInv = inv; }
-                else { targetInv = this.inventory; slot = getSlotAt(e.getX(), e.getY(), 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2 + 100); }
+                else { targetInv = this.inventory; slot = findSlotAt(e.getX(), e.getY()); }
             }
             if (slot == -1) return;
             boolean isLeft = SwingUtilities.isLeftMouseButton(e); boolean isRight = SwingUtilities.isRightMouseButton(e);
             int slotItem = targetInv.getItem(slot); int slotCount = targetInv.getCount(slot); int slotData = targetInv.getData(slot);
             if (isLeft) {
-                if (draggingItem == 0) { draggingItem = slotItem; draggingCount = slotCount; draggingData = slotData; if (targetInv == inventory && slot == 41 && draggingItem != 0) consumeIngredients(); else targetInv.clear(slot); }
+                if (draggingItem == 0) { draggingItem = slotItem; draggingCount = slotCount; draggingData = slotData; if (targetInv == inventory && (slot == 41 || slot == 46) && draggingItem != 0) consumeIngredients(); else targetInv.clear(slot); }
                 else {
-                    if (targetInv == inventory && slot == 41) return;
+                    if (targetInv == inventory && (slot == 41 || slot == 46)) return;
                     if (targetInv != inventory && slot == 2 && openFurnacePos != null) return;
                     if (slotItem == 0) { targetInv.setItem(slot, draggingItem, draggingCount, draggingData); draggingItem = 0; draggingCount = 0; draggingData = 0; }
                     else if (slotItem == draggingItem && slotData == draggingData) { int toAdd = Math.min(draggingCount, Inventory.MAX_STACK - slotCount); targetInv.setItem(slot, slotItem, slotCount + toAdd, slotData); draggingCount -= toAdd; if (draggingCount <= 0) draggingItem = 0; }
                     else { int tId = slotItem; int tC = slotCount; int tD = slotData; targetInv.setItem(slot, draggingItem, draggingCount, draggingData); draggingItem = tId; draggingCount = tC; draggingData = tD; }
                 }
             } else if (isRight) {
-                if (draggingItem == 0) { draggingItem = slotItem; draggingCount = (slotCount + 1) / 2; draggingData = slotData; if (targetInv == inventory && slot == 41 && draggingItem != 0) consumeIngredients(); else targetInv.removeItems(slot, draggingCount); }
+                if (draggingItem == 0) { draggingItem = slotItem; draggingCount = (slotCount + 1) / 2; draggingData = slotData; if (targetInv == inventory && (slot == 41 || slot == 46) && draggingItem != 0) consumeIngredients(); else targetInv.removeItems(slot, draggingCount); }
                 else {
-                    if (targetInv == inventory && slot == 41) return;
+                    if (targetInv == inventory && (slot == 41 || slot == 46)) return;
                     if (targetInv != inventory && slot == 2 && openFurnacePos != null) return;
                     if (slotItem == 0) { targetInv.setItem(slot, draggingItem, 1, draggingData); draggingCount--; if (draggingCount <= 0) draggingItem = 0; }
                     else if (slotItem == draggingItem && slotData == draggingData && slotCount < Inventory.MAX_STACK) { targetInv.setItem(slot, slotItem, slotCount + 1, slotData); draggingCount--; if (draggingCount <= 0) draggingItem = 0; }
@@ -529,7 +544,15 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
     }
     public void mouseReleased(MouseEvent e) { if (e.getButton() == MouseEvent.BUTTON1) isLeftMousePressed = false; if (e.getButton() == MouseEvent.BUTTON3) isRightMousePressed = false; }
     private int findSlotAt(int mx, int my) {
-        if (isInventoryOpen) return getSlotAt(mx, my, 0, 32, 4, 8, (getWidth() - 8 * 55) / 2, (getHeight() - 4 * 55) / 2);
+        if (isInventoryOpen) {
+            int invX = (getWidth() - 8 * 55) / 2;
+            int invY = (getHeight() - 4 * 55) / 2;
+            int s = getSlotAt(mx, my, 0, 32, 4, 8, invX, invY);
+            if (s != -1) return s;
+            int pcX = invX + 8 * 55 + 20; int pcY = invY;
+            s = getSlotAt(mx, my, 42, 4, 2, 2, pcX, pcY); if (s != -1) return s;
+            return getSlotAt(mx, my, 46, 1, 1, 1, pcX + 2 * 55 + 40, pcY + 15);
+        }
         if (isCraftingOpen) {
             int invX = (getWidth() - 8 * 55) / 2; int invY = (getHeight() - 4 * 55) / 2 + 100;
             int s = getSlotAt(mx, my, 0, 32, 4, 8, invX, invY); if (s != -1) return s;
@@ -602,15 +625,22 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         return -1;
     }
     private void updateCrafting() {
-        int[] g = new int[9]; for (int i = 0; i < 9; i++) g[i] = inventory.getItem(32 + i); inventory.clear(41);
-        int logs = 0; for(int i=0; i<9; i++) if(g[i] == SharedData.WOOD) logs++;
-        if(logs == 1 && countItems(g) == 1) { inventory.setItem(41, SharedData.PLANKS, 4); return; }
-        for(int i=0; i<6; i++) { if(g[i] == SharedData.PLANKS && g[i+3] == SharedData.PLANKS && countItems(g) == 2) { inventory.setItem(41, 200, 4); return; } }
-        checkToolRecipe(g, "SWORD", new int[]{100, 101, 102, 103, 104}); checkToolRecipe(g, "SHOVEL", new int[]{130, 131, 132, 133, 134});
-        checkToolRecipe(g, "PICKAXE", new int[]{110, 111, 112, 113, 114}); checkToolRecipe(g, "AXE", new int[]{120, 121, 122, 123, 124});
+        int[] g3 = new int[9]; for (int i = 0; i < 9; i++) g3[i] = inventory.getItem(32 + i); inventory.clear(41);
+        if (checkPlanks(g3, 41)) {} else if (checkSticks(g3, 41)) {} else if (checkCrafter(g3, 41)) {}
+        else { checkToolRecipe(g3, "SWORD", new int[]{100, 101, 102, 103, 104}, 41); checkToolRecipe(g3, "SHOVEL", new int[]{130, 131, 132, 133, 134}, 41);
+               checkToolRecipe(g3, "PICKAXE", new int[]{110, 111, 112, 113, 114}, 41); checkToolRecipe(g3, "AXE", new int[]{120, 121, 122, 123, 124}, 41); }
+
+        int[] g2 = new int[4]; for (int i = 0; i < 4; i++) g2[i] = inventory.getItem(42 + i); inventory.clear(46);
+        if (checkPlanks(g2, 46)) {} else if (checkSticks2x2(g2, 46)) {} else if (checkCrafter2x2(g2, 46)) {}
     }
     private int countItems(int[] g) { int c = 0; for(int i : g) if(i != 0) c++; return c; }
-    private void checkToolRecipe(int[] g, String type, int[] outputIDs) {
+    private boolean checkPlanks(int[] g, int outSlot) { int logs = 0; for(int i=0; i<g.length; i++) if(g[i] == SharedData.WOOD) logs++; if(logs == 1 && countItems(g) == 1) { inventory.setItem(outSlot, SharedData.PLANKS, 4); return true; } return false; }
+    private boolean checkSticks(int[] g, int outSlot) { for(int i=0; i<6; i++) { if(g[i] == SharedData.PLANKS && g[i+3] == SharedData.PLANKS && countItems(g) == 2) { inventory.setItem(outSlot, 200, 4); return true; } } return false; }
+    private boolean checkCrafter(int[] g, int outSlot) { if (g[0]==SharedData.PLANKS && g[1]==SharedData.PLANKS && g[3]==SharedData.PLANKS && g[4]==SharedData.PLANKS && countItems(g)==4) { inventory.setItem(outSlot, SharedData.CRAFTER, 1); return true; } return false; }
+    private boolean checkSticks2x2(int[] g, int outSlot) { if ((g[0]==SharedData.PLANKS && g[2]==SharedData.PLANKS && countItems(g)==2) || (g[1]==SharedData.PLANKS && g[3]==SharedData.PLANKS && countItems(g)==2)) { inventory.setItem(outSlot, 200, 4); return true; } return false; }
+    private boolean checkCrafter2x2(int[] g, int outSlot) { if (g[0]==SharedData.PLANKS && g[1]==SharedData.PLANKS && g[2]==SharedData.PLANKS && g[3]==SharedData.PLANKS && countItems(g)==4) { inventory.setItem(outSlot, SharedData.CRAFTER, 1); return true; } return false; }
+
+    private void checkToolRecipe(int[] g, String type, int[] outputIDs, int outSlot) {
         int stick = 200; int[] mats = {SharedData.PLANKS, SharedData.STONE, 201, 202, 203};
         for (int i = 0; i < 5; i++) {
             int m = mats[i]; boolean match = false;
@@ -618,10 +648,14 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
             else if(type.equals("SHOVEL")) match = (g[1]==m && g[4]==stick && g[7]==stick && countItems(g)==3);
             else if(type.equals("PICKAXE")) match = (g[0]==m && g[1]==m && g[2]==m && g[4]==stick && g[7]==stick && countItems(g)==5);
             else if(type.equals("AXE")) match = (g[0]==m && g[1]==m && g[3]==m && g[4]==stick && g[7]==stick && countItems(g)==5);
-            if(match) { inventory.setItem(41, outputIDs[i], 1); return; }
+            if(match) { inventory.setItem(outSlot, outputIDs[i], 1); return; }
         }
     }
-    private void consumeIngredients() { for(int i=32; i<=40; i++) { if (inventory.getItem(i) != 0) inventory.removeItems(i, 1); } updateCrafting(); }
+    private void consumeIngredients() {
+        for(int i=32; i<=40; i++) { if (inventory.getItem(i) != 0) inventory.removeItems(i, 1); }
+        for(int i=42; i<=45; i++) { if (inventory.getItem(i) != 0) inventory.removeItems(i, 1); }
+        updateCrafting();
+    }
     private void updateFurnaces() {
         for (FurnaceData fd : furnaces.values()) {
             boolean hasFuel = fd.fuelTime > 0; boolean canSmelt = canSmelt(fd);
