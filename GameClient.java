@@ -165,7 +165,10 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         try {
             String[] parts = line.split(" ");
             String cmd = parts[0];
-            if (cmd.equals("PLAYER")) {
+            if (cmd.equals("LOGIN")) {
+                if (parts.length > 2) nextHulcsID = Integer.parseInt(parts[2]);
+            }
+            else if (cmd.equals("PLAYER")) {
                 int pid = Integer.parseInt(parts[1]); int x = Integer.parseInt(parts[2]); int y = Integer.parseInt(parts[3]);
                 PlayerData pd = otherPlayers.get(pid);
                 if (pd == null) otherPlayers.put(pid, new PlayerData(new Point(x, y), 0, Color.BLUE));
@@ -203,6 +206,12 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 Point cp = new Point(x, y);
                 if (!containers.containsKey(cp)) containers.put(cp, new Inventory(32));
                 containers.get(cp).setItem(slot, id, count, d);
+            }
+            else if (cmd.equals("HULCS_DATA")) {
+                int hid = Integer.parseInt(parts[1]); int slot = Integer.parseInt(parts[2]);
+                int id = Integer.parseInt(parts[3]); int count = Integer.parseInt(parts[4]); int d = Integer.parseInt(parts[5]);
+                if (!hulcsStore.containsKey(hid)) hulcsStore.put(hid, new Inventory(32));
+                hulcsStore.get(hid).setItem(slot, id, count, d);
             }
         } catch (Exception e) { e.printStackTrace(); }
     }
@@ -281,7 +290,13 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                         spawnDroppedItem(blockID, 0, gridX * 32 + 8, gridY * 32 + 8);
                     } else if (blockID == SharedData.HULCS) {
                         Inventory inv = containers.remove(p); int hid = nextHulcsID++;
-                        if (inv != null) hulcsStore.put(hid, inv);
+                        if (out != null) out.println("HULCS_ID " + hid);
+                        if (inv != null) {
+                            hulcsStore.put(hid, inv);
+                            for (int i = 0; i < inv.getSize(); i++) {
+                                if (out != null) out.println("HULCS_DATA " + hid + " " + i + " " + inv.getItem(i) + " " + inv.getCount(i) + " " + inv.getData(i));
+                            }
+                        }
                         spawnDroppedItem(blockID, hid, gridX * 32 + 8, gridY * 32 + 8);
                     } else {
                         int dropID = blockID; if (blockID == SharedData.DIAMOND_ORE) dropID = 203;
@@ -313,7 +328,13 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
                 Rectangle bRect = new Rectangle(gridX * 32, gridY * 32, 32, 32);
                 if (!pRect.intersects(bRect)) {
                     map[gridX][gridY] = heldItemID;
-                    if (heldItemID == SharedData.HULCS && heldItemData != 0) containers.put(p, hulcsStore.getOrDefault(heldItemData, new Inventory(32)));
+                    if (heldItemID == SharedData.HULCS && heldItemData != 0) {
+                        Inventory hInv = hulcsStore.getOrDefault(heldItemData, new Inventory(32));
+                        containers.put(p, hInv);
+                        for (int i = 0; i < hInv.getSize(); i++) {
+                            if (out != null) out.println("CONT " + gridX + " " + gridY + " " + i + " " + hInv.getItem(i) + " " + hInv.getCount(i) + " " + hInv.getData(i));
+                        }
+                    }
                     inventory.removeItems(selectedSlot, 1);
                     saveInventory(); if (out != null) out.println("BLOCK " + gridX + " " + gridY + " " + heldItemID);
                     isRightMousePressed = false;
@@ -675,21 +696,41 @@ public class GameClient extends JPanel implements ActionListener, KeyListener, M
         int[] g3 = new int[9]; for (int i = 0; i < 9; i++) g3[i] = inventory.getItem(32 + i);
         inventory.clear(41);
         for (SharedData.Recipe r : SharedData.recipes) {
-            if (!r.is2x2 && Arrays.equals(g3, r.pattern)) { inventory.setItem(41, r.resultID, r.resultCount); break; }
-            if (r.is2x2) {
-                // Try to match 2x2 in 3x3 at different offsets?
-                // For simplicity, we just check fixed top-left for now or exact matches.
-                int[] sub = new int[]{g3[0], g3[1], g3[3], g3[4]};
-                if (Arrays.equals(sub, r.pattern) && countItems(g3) == countItems(sub)) { inventory.setItem(41, r.resultID, r.resultCount); break; }
-            }
+            if (matches(g3, r, false)) { inventory.setItem(41, r.resultID, r.resultCount); break; }
         }
 
         // 2x2 Personal
         int[] g2 = new int[4]; for (int i = 0; i < 4; i++) g2[i] = inventory.getItem(42 + i);
         inventory.clear(46);
         for (SharedData.Recipe r : SharedData.recipes) {
-            if (r.is2x2 && Arrays.equals(g2, r.pattern)) { inventory.setItem(46, r.resultID, r.resultCount); break; }
+            if (r.is2x2 && matches(g2, r, true)) { inventory.setItem(46, r.resultID, r.resultCount); break; }
         }
+    }
+
+    private boolean matches(int[] grid, SharedData.Recipe r, boolean is2x2Grid) {
+        if (r.isShapeless) {
+            Map<Integer, Integer> gCount = new HashMap<>(); int totalG = 0;
+            for (int id : grid) if (id != 0) { gCount.put(id, gCount.getOrDefault(id, 0) + 1); totalG++; }
+            Map<Integer, Integer> rCount = new HashMap<>(); int totalR = 0;
+            for (int id : r.pattern) if (id != 0) { rCount.put(id, rCount.getOrDefault(id, 0) + 1); totalR++; }
+            return totalG == totalR && gCount.equals(rCount);
+        }
+        int gC = is2x2Grid ? 2 : 3; int rC = r.is2x2 ? 2 : 3;
+        int gMinX=gC, gMinY=gC, gMaxX=-1, gMaxY=-1, gCount=0;
+        for (int i=0; i<grid.length; i++) if (grid[i] != 0) {
+            int x=i%gC, y=i/gC; gMinX=Math.min(gMinX,x); gMinY=Math.min(gMinY,y); gMaxX=Math.max(gMaxX,x); gMaxY=Math.max(gMaxY,y); gCount++;
+        }
+        if (gCount == 0) return false;
+        int rMinX=rC, rMinY=rC, rMaxX=-1, rMaxY=-1, rCount=0;
+        for (int i=0; i<r.pattern.length; i++) if (r.pattern[i] != 0) {
+            int x=i%rC, y=i/rC; rMinX=Math.min(rMinX,x); rMinY=Math.min(rMinY,y); rMaxX=Math.max(rMaxX,x); rMaxY=Math.max(rMaxY,y); rCount++;
+        }
+        if (gCount != rCount || (gMaxX-gMinX) != (rMaxX-rMinX) || (gMaxY-gMinY) != (rMaxY-rMinY)) return false;
+        int w = gMaxX-gMinX+1, h = gMaxY-gMinY+1;
+        for (int y=0; y<h; y++) for (int x=0; x<w; x++) {
+            if (grid[(gMinY+y)*gC + (gMinX+x)] != r.pattern[(rMinY+y)*rC + (rMinX+x)]) return false;
+        }
+        return true;
     }
     private int countItems(int[] g) { int c = 0; for(int i : g) if(i != 0) c++; return c; }
     private void consumeIngredients() {

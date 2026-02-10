@@ -88,12 +88,12 @@ public class SharedData {
     public static java.util.List<Recipe> recipes = new ArrayList<>();
 
     static {
-        // Planks
-        recipes.add(new Recipe(new int[]{WOOD, 0, 0, 0}, PLANKS, 4, true));
-        // Sticks
-        recipes.add(new Recipe(new int[]{PLANKS, 0, PLANKS, 0}, 200, 4, true));
+        // Planks (Shapeless)
+        recipes.add(new Recipe(new int[]{WOOD}, PLANKS, 4, true, true));
+        // Sticks (Shapeless)
+        recipes.add(new Recipe(new int[]{PLANKS, PLANKS}, 200, 4, true, true));
         // Crafter
-        recipes.add(new Recipe(new int[]{PLANKS, PLANKS, PLANKS, PLANKS}, CRAFTER, 1, true));
+        recipes.add(new Recipe(new int[]{PLANKS, PLANKS, PLANKS, PLANKS}, CRAFTER, 1, true, false));
 
         // 3x3 Only recipes (Tools)
         int stick = 200;
@@ -117,13 +117,18 @@ public class SharedData {
     }
 
     public static class Recipe {
-        public int[] pattern; // 4 for 2x2, 9 for 3x3
+        public int[] pattern; // 4 for 2x2, 9 for 3x3, or just ingredient list for shapeless
         public int resultID;
         public int resultCount;
         public boolean is2x2;
+        public boolean isShapeless;
+
+        public Recipe(int[] p, int rID, int rC, boolean is2x2, boolean isShapeless) {
+            this.pattern = p; this.resultID = rID; this.resultCount = rC; this.is2x2 = is2x2; this.isShapeless = isShapeless;
+        }
 
         public Recipe(int[] p, int rID, int rC, boolean is2x2) {
-            this.pattern = p; this.resultID = rID; this.resultCount = rC; this.is2x2 = is2x2;
+            this(p, rID, rC, is2x2, false);
         }
     }
 

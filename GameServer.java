@@ -6,6 +6,11 @@ import java.net.URL;
 public class GameServer {
     private static final Map<Integer, PrintWriter> clients = new HashMap<>();
     private static int nextPlayerId = 1;
+    private static int nextHulcsId = 1;
+
+    private static final Map<String, Integer> worldDiff = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> containerDiff = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> hulcsDiff = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void main(String[] args) throws IOException {
         System.out.println("---------------------------------------");
@@ -66,8 +71,11 @@ public class GameServer {
                     clients.put(id, out);
                 }
 
-                // Tell the player their ID
-                out.println("LOGIN " + id);
+                // Tell the player their ID and world state
+                out.println("LOGIN " + id + " " + nextHulcsId);
+                for (Map.Entry<String, Integer> e : worldDiff.entrySet()) out.println("BLOCK " + e.getKey().replace(",", " ") + " " + e.getValue());
+                for (Map.Entry<String, String> e : containerDiff.entrySet()) out.println("CONT " + e.getKey().replace(",", " ") + " " + e.getValue());
+                for (Map.Entry<String, String> e : hulcsDiff.entrySet()) out.println("HULCS_DATA " + e.getKey().replace(",", " ") + " " + e.getValue());
 
                 String line;
                 while ((line = in.readLine()) != null) {
@@ -94,12 +102,22 @@ public class GameServer {
                     }
                     else if (command.equals("CONT")) {
                         // "CONT x y slot id count data"
+                        containerDiff.put(parts[1]+","+parts[2]+","+parts[3], parts[4]+" "+parts[5]+" "+parts[6]);
                         broadcast(line, id);
                     }
                     else if (command.equals("BLOCK")) {
                         // Block changed: "BLOCK x y type"
-                        // Tell everyone to update their map
-                        broadcast(line, -1); // -1 means send to everyone including sender
+                        worldDiff.put(parts[1]+","+parts[2], Integer.parseInt(parts[3]));
+                        broadcast(line, -1);
+                    }
+                    else if (command.equals("HULCS_DATA")) {
+                        // "HULCS_DATA hid slot id count data"
+                        hulcsDiff.put(parts[1] + "," + parts[2], parts[3]+" "+parts[4]+" "+parts[5]);
+                        broadcast(line, id);
+                    }
+                    else if (command.equals("HULCS_ID")) {
+                        nextHulcsId = Math.max(nextHulcsId, Integer.parseInt(parts[1]) + 1);
+                        broadcast(line, id);
                     }
                     else if (command.equals("HIT")) {
                         // "HIT targetID damage"
